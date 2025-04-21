@@ -1,8 +1,7 @@
 import torch
 from torch import nn
 from torchvision.models.vgg import vgg16
-
-
+import lpips
 class GeneratorLoss(nn.Module):
     def __init__(self):
         super(GeneratorLoss, self).__init__()
@@ -13,6 +12,7 @@ class GeneratorLoss(nn.Module):
         self.loss_network = loss_network
         self.mse_loss = nn.MSELoss()
         self.tv_loss = TVLoss()
+        self.lpips_loss = lpips.LPIPS(net='vgg')  # 初始化LPIPS损失函数
 
     def forward(self, out_labels, out_images, target_images):
         # Adversarial Loss
@@ -23,7 +23,9 @@ class GeneratorLoss(nn.Module):
         image_loss = self.mse_loss(out_images, target_images)
         # TV Loss
         tv_loss = self.tv_loss(out_images)
-        return image_loss + 0.001 * adversarial_loss + 0.006 * perception_loss + 2e-8 * tv_loss
+        # LPIPS Loss
+        lpips_loss = self.lpips_loss(out_images, target_images).mean()  # 计算LPIPS损失
+        return image_loss + 0.001 * adversarial_loss + 0.006 * perception_loss + 2e-8 * tv_loss + 0.001 * lpips_loss  # 添加LPIPS损失到总损失中
 
 
 class TVLoss(nn.Module):

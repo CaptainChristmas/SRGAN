@@ -1,7 +1,7 @@
 import argparse
 import os
 from math import log10
-
+import lpips
 import numpy as np
 import pandas as pd
 import torch
@@ -23,7 +23,7 @@ UPSCALE_FACTOR = opt.upscale_factor
 MODEL_NAME = opt.model_name
 
 results = {'Set5': {'psnr': [], 'ssim': []}, 'Set14': {'psnr': [], 'ssim': []}, 'BSD100': {'psnr': [], 'ssim': []},
-           'Urban100': {'psnr': [], 'ssim': []}, 'SunHays80': {'psnr': [], 'ssim': []}}
+           'Urban100': {'psnr': [], 'ssim': []}, 'SunHays80': {'psnr': [], 'ssim': [], 'lpips': []}}
 
 model = Generator(UPSCALE_FACTOR).eval()
 if torch.cuda.is_available():
@@ -50,6 +50,7 @@ for image_name, lr_image, hr_restore_img, hr_image in test_bar:
     mse = ((hr_image - sr_image) ** 2).data.mean()
     psnr = 10 * log10(1 / mse)
     ssim = pytorch_ssim.ssim(sr_image, hr_image).data[0]
+    lpips_score = lpips_loss(sr_image, hr_image).mean().item()  # 计算LPIPS分数
 
     test_images = torch.stack(
         [display_transform()(hr_restore_img.squeeze(0)), display_transform()(hr_image.data.cpu().squeeze(0)),
@@ -61,20 +62,25 @@ for image_name, lr_image, hr_restore_img, hr_image in test_bar:
     # save psnr\ssim
     results[image_name.split('_')[0]]['psnr'].append(psnr)
     results[image_name.split('_')[0]]['ssim'].append(ssim)
+    results[image_name.split('_')[0]]['lpips'].append(lpips_score)
 
 out_path = 'statistics/'
 saved_results = {'psnr': [], 'ssim': []}
 for item in results.values():
     psnr = np.array(item['psnr'])
     ssim = np.array(item['ssim'])
+    lpips = np.array(item['lpips'])
     if (len(psnr) == 0) or (len(ssim) == 0):
         psnr = 'No data'
         ssim = 'No data'
+        lpips = 'No data'
     else:
         psnr = psnr.mean()
         ssim = ssim.mean()
+        lpips = lpips.mean()
     saved_results['psnr'].append(psnr)
     saved_results['ssim'].append(ssim)
+    saved_results['lpips'].append(lpips)
 
 data_frame = pd.DataFrame(saved_results, results.keys())
 data_frame.to_csv(out_path + 'srf_' + str(UPSCALE_FACTOR) + '_test_results.csv', index_label='DataSet')
