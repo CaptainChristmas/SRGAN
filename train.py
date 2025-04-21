@@ -9,7 +9,6 @@ import torch.utils.data
 import torchvision.utils as utils
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 import pytorch_ssim
 from data_utils import TrainDatasetFromFolder, ValDatasetFromFolder, display_transform
 from loss import GeneratorLoss
@@ -19,8 +18,7 @@ parser = argparse.ArgumentParser(description='Train Super Resolution Models')
 parser.add_argument('--crop_size', default=88, type=int, help='training images crop size')
 parser.add_argument('--upscale_factor', default=4, type=int, choices=[2, 4, 8],
                     help='super resolution upscale factor')
-parser.add_argument('--num_epochs', default=200, type=int, help='train epoch number')
-
+parser.add_argument('--num_epochs', default=100, type=int, help='train epoch number')
 
 if __name__ == '__main__':
     opt = parser.parse_args()
@@ -29,10 +27,10 @@ if __name__ == '__main__':
     UPSCALE_FACTOR = opt.upscale_factor
     NUM_EPOCHS = opt.num_epochs
     
-    train_set = TrainDatasetFromFolder('../DIV2K/DIV2K_train_LR_bicubic/X4', crop_size=CROP_SIZE, upscale_factor=UPSCALE_FACTOR)
-    val_set = ValDatasetFromFolder('../DIV2K/DIV2K_train_LR_bicubic/X4', crop_size=CROP_SIZE, upscale_factor=UPSCALE_FACTOR)
-    train_loader = DataLoader(dataset=train_set, num_workers=8, batch_size=128, shuffle=True)
-    val_loader = DataLoader(dataset=val_set, num_workers=8, batch_size=64, shuffle=False)
+    train_set = TrainDatasetFromFolder('../DIV2K/DIV2K_train_HR', crop_size=CROP_SIZE, upscale_factor=UPSCALE_FACTOR)
+    val_set = ValDatasetFromFolder('../DIV2K/DIV2K_valid_HR', crop_size=CROP_SIZE, upscale_factor=UPSCALE_FACTOR)
+    train_loader = DataLoader(dataset=train_set, num_workers=8, batch_size=64, shuffle=True)
+    val_loader = DataLoader(dataset=val_set, num_workers=8, batch_size=32, shuffle=False)
     
     netG = Generator(UPSCALE_FACTOR)
     print('# generator parameters:', sum(param.numel() for param in netG.parameters()))
