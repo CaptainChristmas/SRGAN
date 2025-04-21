@@ -24,10 +24,10 @@ MODEL_NAME = opt.model_name
 
 results = {
     'Set5': {'psnr': [], 'ssim': [], 'lpips': []}, 
-    # 'Set14': {'psnr': [], 'ssim': [], 'lpips': []}, 
-    # 'BSD100': {'psnr': [], 'ssim': [], 'lpips': []},
-    # 'Urban100': {'psnr': [], 'ssim': [], 'lpips': []}, 
-    # 'SunHays80': {'psnr': [], 'ssim': [], 'lpips': []}
+    'Set14': {'psnr': [], 'ssim': [], 'lpips': []}, 
+    'BSD100': {'psnr': [], 'ssim': [], 'lpips': []},
+    'Urban100': {'psnr': [], 'ssim': [], 'lpips': []}, 
+    'SunHays80': {'psnr': [], 'ssim': [], 'lpips': []}
           }
 
 model = Generator(UPSCALE_FACTOR).eval()
@@ -36,7 +36,7 @@ if torch.cuda.is_available():
 model.load_state_dict(torch.load('epochs/' + MODEL_NAME))
 
 test_set = TestDatasetFromFolder('data/test', upscale_factor=UPSCALE_FACTOR)
-test_loader = DataLoader(dataset=test_set, num_workers=8, batch_size=1, shuffle=False)
+test_loader = DataLoader(dataset=test_set, num_workers=8, batch_size=32, shuffle=False)
 test_bar = tqdm(test_loader, desc='[testing benchmark datasets]')
 
 out_path = 'benchmark_results/SRF_' + str(UPSCALE_FACTOR) + '/'
@@ -48,31 +48,30 @@ lpips_loss = lpips.LPIPS(net='vgg')
 if torch.cuda.is_available():
     lpips_loss = lpips_loss.cuda()
     
-for image_name, lr_image, hr_restore_img, hr_image in test_bar:
-    image_name = image_name[0]
-    lr_image = Variable(lr_image, volatile=True)
-    hr_image = Variable(hr_image, volatile=True)
-    if torch.cuda.is_available():
-        lr_image = lr_image.cuda()
-        hr_image = hr_image.cuda()
+with torch.no_grad():  # 使用torch.no_grad()上下文管理器
+    for image_name, lr_image, hr_restore_img, hr_image in test_bar:
+        image_name = image_name[0]
+        if torch.cuda.is_available():
+            lr_image = lr_image.cuda()
+            hr_image = hr_image.cuda()
 
-    sr_image = model(lr_image)
-    mse = ((hr_image - sr_image) ** 2).data.mean()
-    psnr = 10 * log10(1 / mse)
-    ssim = pytorch_ssim.ssim(sr_image, hr_image).data[0]
-    lpips_score = lpips_loss(sr_image, hr_image).mean().item()  # 计算LPIPS分数
+        sr_image = model(lr_image)
+        mse = ((hr_image - sr_image) ** 2).mean().item()
+        psnr = 10 * log10(1 / mse)
+        ssim = pytorch_ssim.ssim(sr_image, hr_image).item()  # 使用item()方法
+        lpips_score = lpips_loss(sr_image, hr_image).mean().item()  # 计算LPIPS分数
 
-    test_images = torch.stack(
-        [display_transform()(hr_restore_img.squeeze(0)), display_transform()(hr_image.data.cpu().squeeze(0)),
-         display_transform()(sr_image.data.cpu().squeeze(0))])
-    image = utils.make_grid(test_images, nrow=3, padding=5)
-    utils.save_image(image, out_path + image_name.split('.')[0] + '_psnr_%.4f_ssim_%.4f_lpips_%.4f.' % (psnr, ssim, lpips_score) +
-                     image_name.split('.')[-1], padding=5)
+        test_images = torch.stack(
+            [display_transform()(hr_restore_img.squeeze(0)), display_transform()(hr_image.cpu().squeeze(0)),
+             display_transform()(sr_image.cpu().squeeze(0))])
+        image = utils.make_grid(test_images, nrow=3, padding=5)
+        utils.save_image(image, out_path + image_name.split('.')[0] + '_psnr_%.4f_ssim_%.4f.' % (psnr, ssim) +
+                         image_name.split('.')[-1], padding=5)
 
-    # save psnr\ssim
-    results[image_name.split('_')[0]]['psnr'].append(psnr)
-    results[image_name.split('_')[0]]['ssim'].append(ssim)
-    results[image_name.split('_')[0]]['lpips'].append(lpips_score)
+        # save psnr\ssim
+        results[image_name.split('_')[0]]['psnr'].append(psnr)
+        results[image_name.split('_')[0]]['ssim'].append(ssim)
+        results[image_name.split('_')[0]]['lpips'].append(lpips_score)
 
 out_path = 'statistics/'
 saved_results = {'psnr': [], 'ssim': [], 'lpips': []}
